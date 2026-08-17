@@ -55,4 +55,26 @@ export class Physics {
     createCollider(colliderDesc, rigidBody) {
         return this.world.createCollider(colliderDesc, rigidBody);
     }
+
+    // A KinematicCharacterController is Rapier's purpose-built tool for
+    // "something moved by code, not forces, that still needs to slide
+    // along walls/floors instead of clipping through them" — the player,
+    // and eventually any AI-driven mob (see Player.js for the full
+    // reasoning, and https://rapier.rs/docs/user_guides/javascript/character_controller/
+    // for Rapier's own docs). One controller instance carries no
+    // per-collider state, so the same instance can drive many characters —
+    // callers don't each need their own.
+    createCharacterController(offset) {
+        return this.world.createCharacterController(offset);
+    }
+
+    // Kinematic bodies are deliberately immune to gravity/forces (that's
+    // what makes their movement exact) — Rapier's docs are explicit that
+    // emulating gravity for one is the caller's job, by adding a downward
+    // component to its desired movement every frame. Exposing the world's
+    // gravity here means whatever does that doesn't need its own hardcoded
+    // copy of `-9.81`.
+    get gravity() {
+        return this.world.gravity;
+    }
 }
