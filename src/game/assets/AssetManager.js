@@ -21,6 +21,12 @@ export class AssetManager {
         // finished loading, they both await the same in-flight request
         // instead of triggering a second load.
         this.modelCache = new Map();
+
+        // Maps the same path -> the actual resolved GLTF data, once it's
+        // in. Separate from modelCache because that one holds a Promise
+        // even after loading finishes — this map is what lets getCached()
+        // hand back a model with no await at all.
+        this.resolvedModels = new Map();
     }
 
     // Returns a Promise resolving to the parsed GLTF object, which looks like
@@ -34,7 +40,10 @@ export class AssetManager {
         const promise = new Promise((resolve, reject) => {
             this.loader.load(
                 path,
-                (gltf) => resolve(gltf),
+                (gltf) => {
+                    this.resolvedModels.set(path, gltf);
+                    resolve(gltf);
+                },
                 undefined, // onProgress callback — unused here
                 (error) => reject(error),
             );
@@ -42,5 +51,20 @@ export class AssetManager {
 
         this.modelCache.set(path, promise);
         return promise;
+    }
+
+    // Synchronous lookup — returns the parsed GLTF if this path has already
+    // finished loading, or undefined otherwise. No Promise, no await.
+    getCached(path) {
+        return this.resolvedModels.get(path);
+    }
+
+    // Loads every path in one batch, up front — e.g. during a loading
+    // screen, so every model is already cached by the time something needs
+    // to spawn. Each path still only goes through loadModel() once, so
+    // calling this doesn't change anything about how the cache behaves,
+    // it just changes *when* the loading happens.
+    preload(paths) {
+        return Promise.all(paths.map((path) => this.loadModel(path)));
     }
 }
