@@ -1,7 +1,7 @@
 // AssetManager.js
 //
-// Loads and caches GLTF/GLB 3D models. This is the "glb loader" the mage
-// model needs — GLTFLoader is Three.js's built-in loader for the .glb/.gltf
+// Loads and caches GLTF/GLB models for the player and world. GLTFLoader is
+// Three.js's built-in loader for the .glb/.gltf
 // format (the standard format exported by Blender and most 3D tools).
 //
 // Why a cache: GLTFLoader.load() does an async network fetch + parse every
@@ -15,7 +15,7 @@ export class AssetManager {
     constructor() {
         this.loader = new GLTFLoader();
 
-        // Maps a model path (e.g. "/mage.glb") -> a Promise that resolves to
+        // Maps a model path (e.g. "/knight.glb") -> a Promise that resolves to
         // the loaded GLTF data. Storing the *promise* (not just the eventual
         // result) means if two things ask for the same model before it's
         // finished loading, they both await the same in-flight request

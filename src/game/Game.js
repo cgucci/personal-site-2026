@@ -1,10 +1,8 @@
 // Game.js
 //
-// The top-level orchestrator. Everything else in src/game/ is a small,
-// single-purpose piece (rendering, physics, asset loading, mob spawning...);
-// Game.js is the only file that wires them all together and drives the
-// per-frame loop. Nothing below has mob-specific logic hardcoded into it —
-// the mage is just the first entry registered with MobRegistry.
+// The top-level orchestrator for the explorable world. It owns the scene,
+// player, physics and render loop; world props can be added directly to the
+// Three.js scene as the environment grows.
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d';
 
@@ -12,10 +10,6 @@ import { Renderer } from './core/Renderer.js';
 import { Physics } from './core/Physics.js';
 import { Clock } from './core/Clock.js';
 import { AssetManager } from './assets/AssetManager.js';
-import { EntityManager } from './entities/EntityManager.js';
-import { MobRegistry } from './mobs/MobRegistry.js';
-import { MobFactory } from './mobs/MobFactory.js';
-import { mageDefinition } from './mobs/definitions/mage.js';
 import { InputManager } from './core/InputManager.js';
 import { Player } from './player/Player.js';
 
@@ -24,15 +18,12 @@ export class Game {
         this.scene = new THREE.Scene();
 
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        // Pulled back and up slightly so we're looking at the origin, where
-        // the mage spawns, from a natural angle.
+        // Pulled back and up slightly for an overview of the starting area.
         this.camera.position.set(10, 10, 10);
         this.camera.lookAt(0, 0, 0);
 
-        // GLTF models default to PBR materials (MeshStandardMaterial), which
-        // are lightless by design — without any light in the scene the mage
-        // would render as pure black. This isn't scene decoration, it's the
-        // minimum needed for the model to be visible at all.
+        // GLTF models use light-reactive PBR materials, so the world needs
+        // at least ambient and directional light to be visible.
         this.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
         const sun = new THREE.DirectionalLight(0xffffff, 1.2);
         sun.position.set(3, 5, 2);
@@ -52,36 +43,18 @@ export class Game {
         this.inputManager = new InputManager();
 
         this.assetManager = new AssetManager();
-        this.entityManager = new EntityManager(this.scene);
 
         this.createFloor();
 
-        this.mobRegistry = new MobRegistry();
-        this.mobRegistry.register(mageDefinition);
-
-        this.mobFactory = new MobFactory({
-            assetManager: this.assetManager,
-            physics: this.physics,
-        });
-
-        // Spawn the mage a little above the floor so it visibly drops onto
-        // it under gravity, instead of starting already overlapping it.
-        const mage = await this.mobFactory.spawn(
-            this.mobRegistry.get('mage'), 
-            {x: 0, y: 3, z: 0});
-        this.entityManager.add(mage);
-
-        // Spawn the player standing on the floor next to the mage. Unlike
-        // the mage's y=3 drop, this is a kinematic body (see Player.js) —
-        // it isn't affected by gravity, so it starts exactly where it's
-        // placed rather than falling into position.
+        // The player is the only runtime entity for now, so it can be added
+        // and synchronized directly without a collection manager.
         this.player = await Player.create({
             physics: this.physics,
             assetManager: this.assetManager,
             inputManager: this.inputManager,
             position: { x: 2, y: 2, z: 0 },
         });
-        this.entityManager.add(this.player);
+        this.scene.add(this.player.object3D);
 
         // setAnimationLoop is Three.js's version of requestAnimationFrame —
         // it re-invokes our callback every frame and automatically pauses
@@ -119,17 +92,16 @@ export class Game {
         this.physics.createCollider(colliderDesc, rigidBody);
     }
 
-    // The per-frame loop. Order matters here:
-    //   1. Advance physics by however many fixed steps have accumulated.
-    //   2. Copy the new physics positions onto the visible meshes.
-    //   3. Draw the frame.
+    // World props that use physics can follow this same order: update their
+    // gameplay state, step Rapier, then copy the resulting transform to the
+    // matching Three.js object before rendering.
     tick() {
         const steps = this.clock.tick();
         for (const dt of steps) {
             this.player.update(dt);
             this.physics.step();
         }
-        this.entityManager.update();
+        this.player.syncFromPhysics();
         this.renderer.render(this.scene, this.camera);
     }
 }

@@ -1,11 +1,7 @@
 // Player.js
 //
-// The player-controlled character. A mob's Entity is driven one way —
-// physics decides its position, and Entity.syncFromPhysics() copies that
-// onto the visible mesh (see entities/Entity.js). The player is driven the
-// OTHER way: input decides where it wants to go, and physics only gets a
-// say in whether that's actually possible (sliding along a wall instead of
-// clipping through it, being blocked by the floor instead of sinking in).
+// The player-controlled character. Input proposes a move and Rapier's
+// character controller resolves it against the explorable world's colliders.
 //
 // That "propose a move, let physics correct it" job is exactly what
 // Rapier's KinematicCharacterController exists for — see
@@ -72,26 +68,19 @@ const MODEL_FORWARD = new THREE.Vector3(0, 0, 1);
 const TURN_SPEED = 15;
 
 export class Player {
-    // Loading the model is async, so Player is built via this factory
-    // instead of a plain constructor — same reason MobFactory.spawn() is
-    // async (see MobFactory.js).
+    // Loading the model is async, so Player is built via a factory instead
+    // of a plain constructor.
     static async create({ physics, assetManager, inputManager, position = { x: 0, y: 0, z: 0 } }) {
         // All three loads are independent, so there's no reason to await
         // them one at a time — AssetManager caches each by path anyway,
-        // so this also means a second Player (or a mob sharing this rig)
-        // wouldn't re-fetch any of these.
+        // so another instance sharing this rig would not re-fetch them.
         const [gltf, generalAnim, movementAnim] = await Promise.all([
             assetManager.loadModel(MODEL_PATH),
             assetManager.loadModel(ANIMATION_PATH),
             assetManager.loadModel(MOVEMENT_ANIMATION_PATH),
         ]);
 
-        // SkeletonUtils.clone() rather than Object3D.clone() for the same
-        // reason MobFactory clones the mage: knight.glb is a skinned mesh,
-        // and only this helper rebuilds the skeleton against the clone's
-        // own bones instead of leaving it pointing at gltf.scene's — see
-        // the detailed comment in MobFactory.js for the failure mode that
-        // avoids.
+        // SkeletonUtils.clone() gives this player its own bones and skin.
         const object3D = cloneSkinnedScene(gltf.scene);
 
         // Pick out just the specific clips Player cares about, by name,
@@ -119,11 +108,7 @@ export class Player {
         // call one physics step from now.
         this.animationController.update(0);
 
-        // kinematicPositionBased: this body is moved by CODE (see update()
-        // below), not by gravity/forces — the opposite of the mage's
-        // dynamic() body in MobFactory.js. It still participates in physics,
-        // so moving it into e.g. a wall gets resolved as a collision rather
-        // than passing straight through.
+        // This body is moved by code but still collides with world geometry.
         const rigidBodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased()
             .setTranslation(position.x, position.y, position.z);
         const rigidBody = physics.createRigidBody(rigidBodyDesc);
@@ -159,9 +144,6 @@ export class Player {
         this.velocity = new THREE.Vector3();
     }
 
-    // Duck-typed to match what EntityManager expects from anything it's
-    // given (see EntityManager.js) — Player isn't an Entity, but it needs to
-    // look like one to be added to the scene and ticked the same way.
     get object3D() {
         return this.entity.object3D;
     }
@@ -170,11 +152,8 @@ export class Player {
         this.entity.syncFromPhysics();
     }
 
-    // Called once per fixed physics step, BEFORE Physics.step() runs, so
-    // this step's input is what collisions get resolved against. This is
-    // deliberately separate from EntityManager.update(), which only runs
-    // AFTER the physics step (see EntityManager.js) — the reverse of what
-    // moving a kinematic body needs.
+    // Called before each fixed physics step so this move is what Rapier
+    // resolves against the world's colliders.
     update(dt) {
         const inputDirection = new THREE.Vector3();
         if (this.inputManager.isDown('KeyW') || this.inputManager.isDown('ArrowUp')) inputDirection.z -= 1;

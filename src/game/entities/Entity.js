@@ -12,13 +12,8 @@ export class Entity {
         this.collider = collider;
     }
 
-    // Called once per rendered frame (from EntityManager.update(), after
-    // Physics.step() has run) to copy the rigid body's simulated
-    // position/rotation onto the visible mesh. This is a ONE-WAY sync:
-    // physics drives the visuals here. For a kinematic/player-controlled
-    // entity you'd instead write the mesh's intended position INTO the
-    // rigid body — but for a mob that's just falling under gravity, this
-    // direction is all we need.
+    // Copy the current Rapier transform onto the corresponding Three.js
+    // object after stepping physics.
     syncFromPhysics() {
         if (!this.rigidBody) return;
 
